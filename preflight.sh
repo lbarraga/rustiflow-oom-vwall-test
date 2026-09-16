@@ -136,7 +136,11 @@ if [ -x "$BIN" ] && [ -n "$IFACE" ]; then
     fi
   else
     REASON="$(grep -Eio 'permission denied|failed to (load|attach)[^\n]*|not permitted|BTF[^\n]*|panicked[^\n]*' "$RLOG" | head -n1)"
-    bad "rustiflow eBPF load" "${REASON:-no CSV produced; see $RLOG}"
+    bad "rustiflow eBPF load" "${REASON:-no CSV produced (see log below)}"
+  fi
+  # surface the capture log on any eBPF/capture problem, BEFORE cleanup
+  if grep -q FAIL <<<"${_RESULTS[*]}" && [ -f "$RLOG" ]; then
+    echo "---- rustiflow capture log tail ($RLOG) ----"; tail -n 20 "$RLOG"; echo "--------------------------------------------"
   fi
   rm -rf "$CAPDIR"
 fi
