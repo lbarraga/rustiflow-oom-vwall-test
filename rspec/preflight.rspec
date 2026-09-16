@@ -35,6 +35,8 @@
       <disk_image name="urn:publicid:IDN+wall2.ilabt.iminds.be+image+emulab-ops:UBUNTU20-64-STD"/>
     </sliver_type>
     <services>
+      <!-- enable IPv4 NAT FIRST (apt/git need it); --ciphers works around wall2's old TLS -->
+      <execute shell="sh" command="wget -O - -q --ciphers DEFAULT@SECLEVEL=1 https://www.wall2.ilabt.iminds.be/enable-nat.sh | sudo bash"/>
       <execute shell="sh" command="sudo apt-get update ; sudo apt-get install -y git ; git clone https://github.com/lbarraga/rustiflow-oom-vwall-test.git /local/rustiflow-oom-vwall-test &amp;&amp; /local/rustiflow-oom-vwall-test/bootstrap.sh victim &gt; /local/bootstrap.log 2&gt;&amp;1"/>
     </services>
     <interface client_id="node0:if0">
@@ -49,6 +51,8 @@
       <disk_image name="urn:publicid:IDN+wall2.ilabt.iminds.be+image+emulab-ops:UBUNTU20-64-STD"/>
     </sliver_type>
     <services>
+      <!-- enable IPv4 NAT FIRST (apt/git need it); --ciphers works around wall2's old TLS -->
+      <execute shell="sh" command="wget -O - -q --ciphers DEFAULT@SECLEVEL=1 https://www.wall2.ilabt.iminds.be/enable-nat.sh | sudo bash"/>
       <execute shell="sh" command="sudo apt-get update ; sudo apt-get install -y git ; git clone https://github.com/lbarraga/rustiflow-oom-vwall-test.git /local/rustiflow-oom-vwall-test &amp;&amp; /local/rustiflow-oom-vwall-test/bootstrap.sh attacker &gt; /local/bootstrap.log 2&gt;&amp;1"/>
     </services>
     <interface client_id="node1:if0">
