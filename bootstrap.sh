@@ -83,6 +83,11 @@ if ! ver_ge "$(kernel_mm)" "$MIN_KERNEL"; then
 fi
 log "kernel $(uname -r) satisfies >= $MIN_KERNEL"
 
+# 2b. experiment interface ----------------------------------------------------
+# The HWE-kernel reboot leaves emulab's experiment NIC down/unaddressed; reassert
+# it from the testbed's own interface data (best-effort, idempotent).
+ensure_experiment_iface || warn "experiment iface config was best-effort only"
+
 # 3. base tools ---------------------------------------------------------------
 log "installing base packages"
 sudo apt-get update -y

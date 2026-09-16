@@ -35,6 +35,58 @@ enable_nat() {
   wget -O - -q https://www.wall2.ilabt.iminds.be/enable-nat.sh | sudo bash
 }
 
+# --- experiment interface configuration ------------------------------------
+# After our HWE-kernel reboot, emulab's rc.ifconfig fails to map the experiment
+# NIC's MAC to its (renamed) Linux interface and leaves it DOWN with no IP. We
+# redo that job from the testbed's own interface data: match MAC -> current dev,
+# bring it up, assign the intended IP. Idempotent and best-effort.
+
+mask2prefix() {
+  case "$1" in
+    255.255.255.0|"") echo 24 ;;
+    255.255.0.0)      echo 16 ;;
+    255.255.255.128)  echo 25 ;;
+    255.255.255.192)  echo 26 ;;
+    255.255.255.252)  echo 30 ;;
+    *) local IFS=. o p=0; for o in $1; do while [ "${o:-0}" -gt 0 ]; do p=$((p + (o & 1))); o=$((o >> 1)); done; done; echo "$p" ;;
+  esac
+}
+
+# Emulab's cached interface config (no network needed), with a tmcc fallback.
+experiment_ifconfig_data() {
+  local f t
+  for f in /var/emulab/boot/tmcc/ifconfig /var/emulab/boot/tmcc.ifconfig; do
+    [ -r "$f" ] && { cat "$f"; return 0; }
+  done
+  for t in /usr/local/etc/emulab/bin/tmcc /usr/local/etc/emulab/tmcc "$(command -v tmcc 2>/dev/null)"; do
+    [ -n "$t" ] && [ -x "$t" ] && { sudo "$t" ifconfig 2>/dev/null; return 0; }
+  done
+  return 0
+}
+
+ensure_experiment_iface() {
+  local data line inet mask mac cmac dev prefix
+  data="$(experiment_ifconfig_data)"
+  [ -n "$data" ] || { warn "no emulab interface data found; skipping iface config"; return 0; }
+  printf '%s\n' "$data" | grep -i '^INTERFACE' | while IFS= read -r line; do
+    inet="$(sed -n 's/.*INET=\([0-9.][0-9.]*\).*/\1/p' <<<"$line")"
+    mask="$(sed -n 's/.*MASK=\([0-9.][0-9.]*\).*/\1/p' <<<"$line")
+    mac="$(sed -n 's/.*MAC=\([0-9a-fA-F][0-9a-fA-F]*\).*/\1/p' <<<"$line")
+    [ -n "$inet" ] && [ -n "$mac" ] || continue
+    cmac="$(sed 's/\(..\)/\1:/g; s/:$//' <<<"$mac" | tr 'A-F' 'a-f')"
+    dev="$(ip -o link 2>/dev/null | awk -v m="$cmac" 'tolower($0) ~ m {print $2}' | sed 's/[:@].*//' | head -n1)"
+    [ -n "$dev" ] || { warn "no local interface matches MAC $cmac (INET $inet)"; continue; }
+    prefix="$(mask2prefix "$mask")"
+    sudo ip link set dev "$dev" up || true
+    if ip -o -4 addr show dev "$dev" 2>/dev/null | grep -qw "$inet"; then
+      log "experiment iface $dev already has $inet/$prefix"
+    else
+      sudo ip addr add "$inet/$prefix" dev "$dev" && log "configured experiment iface $dev = $inet/$prefix"
+    fi
+  done
+  return 0
+}
+
 # --- provisioning markers --------------------------------------------------
 mark() { # mark <role> <STATUS>   (RF_REV, if set by bootstrap, records the pinned rev)
   sudo mkdir -p "$MARKER_DIR"
