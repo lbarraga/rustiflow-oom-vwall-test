@@ -90,7 +90,11 @@ if [ -x "$BIN" ] && [ -n "$IFACE" ]; then
   CAPDIR="$(mktemp -d /tmp/rf.XXXXXX)"
   CSV="$CAPDIR/flows.csv"; RLOG="$CAPDIR/rf.log"
   log "starting ${CAP_SECS}s eBPF capture on $IFACE"
-  sudo timeout "$CAP_SECS" "$BIN" \
+  # rustiflow only flushes its buffered flows on graceful shutdown, which it
+  # triggers on SIGINT (realtime.rs waits on ctrl_c). timeout's default SIGTERM
+  # would kill it before the flush, losing every row — so send SIGINT (-s INT),
+  # with a SIGKILL backstop (-k) if graceful shutdown hangs.
+  sudo timeout -k 5 -s INT "$CAP_SECS" "$BIN" \
       --features basic --output csv --export-path "$CSV" --header --packet-graph \
       --early-export 2 --idle-timeout 5 --expiration-check-interval 2 \
       realtime "$IFACE" >"$RLOG" 2>&1 &
