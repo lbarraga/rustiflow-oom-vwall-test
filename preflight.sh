@@ -83,7 +83,12 @@ fi
 # window, so flows are guaranteed; on the victim, flows appear if the attacker
 # runs concurrently (a bonus — an empty-but-loaded capture still proves eBPF works).
 if [ -x "$BIN" ] && [ -n "$IFACE" ]; then
-  CSV="$(mktemp /tmp/rf.XXXXXX.csv)"; RLOG="$(mktemp /tmp/rf.XXXXXX.log)"
+  # Use a private (non-sticky) temp DIR, not a pre-made file in /tmp: rustiflow
+  # runs as root, and fs.protected_regular blocks root from re-creating a file it
+  # doesn't own inside sticky /tmp. Letting root create the file fresh here avoids
+  # that. The dir is ours, so cleanup can still unlink the root-owned CSV.
+  CAPDIR="$(mktemp -d /tmp/rf.XXXXXX)"
+  CSV="$CAPDIR/flows.csv"; RLOG="$CAPDIR/rf.log"
   log "starting ${CAP_SECS}s eBPF capture on $IFACE"
   sudo timeout "$CAP_SECS" "$BIN" \
       --features basic --output csv --export-path "$CSV" --header --packet-graph \
@@ -124,7 +129,7 @@ if [ -x "$BIN" ] && [ -n "$IFACE" ]; then
     REASON="$(grep -Eio 'permission denied|failed to (load|attach)[^\n]*|not permitted|BTF[^\n]*|panicked[^\n]*' "$RLOG" | head -n1)"
     bad "rustiflow eBPF load" "${REASON:-no CSV produced; see $RLOG}"
   fi
-  rm -f "$CSV" "$RLOG"
+  rm -rf "$CAPDIR"
 fi
 
 # --- report -----------------------------------------------------------------
