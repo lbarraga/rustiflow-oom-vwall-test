@@ -34,7 +34,7 @@
       <disk_image name="urn:publicid:IDN+wall2.ilabt.iminds.be+image+emulab-ops:UBUNTU22-64-STD"/>
     </sliver_type>
     <services>
-      <execute shell="sh" command="sudo apt-get update ; sudo apt-get install -y git ; git clone https://github.com/YOURUSER/rustiflow-vwall.git /local/rustiflow-vwall &amp;&amp; /local/rustiflow-vwall/bootstrap.sh victim &gt; /local/bootstrap.log 2&gt;&amp;1"/>
+      <execute shell="sh" command="sudo apt-get update ; sudo apt-get install -y git ; git clone https://github.com/lbarraga/rustiflow-vwall.git /local/rustiflow-vwall &amp;&amp; /local/rustiflow-vwall/bootstrap.sh victim &gt; /local/bootstrap.log 2&gt;&amp;1"/>
     </services>
     <interface client_id="node0:if0">
       <ip address="10.0.1.1" netmask="255.255.255.0" type="ipv4"/>
@@ -48,7 +48,7 @@
       <disk_image name="urn:publicid:IDN+wall2.ilabt.iminds.be+image+emulab-ops:UBUNTU22-64-STD"/>
     </sliver_type>
     <services>
-      <execute shell="sh" command="sudo apt-get update ; sudo apt-get install -y git ; git clone https://github.com/YOURUSER/rustiflow-vwall.git /local/rustiflow-vwall &amp;&amp; /local/rustiflow-vwall/bootstrap.sh attacker &gt; /local/bootstrap.log 2&gt;&amp;1"/>
+      <execute shell="sh" command="sudo apt-get update ; sudo apt-get install -y git ; git clone https://github.com/lbarraga/rustiflow-vwall.git /local/rustiflow-vwall &amp;&amp; /local/rustiflow-vwall/bootstrap.sh attacker &gt; /local/bootstrap.log 2&gt;&amp;1"/>
     </services>
     <interface client_id="node1:if0">
       <ip address="10.0.1.2" netmask="255.255.255.0" type="ipv4"/>

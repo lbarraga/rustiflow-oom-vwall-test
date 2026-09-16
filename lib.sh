@@ -36,9 +36,9 @@ enable_nat() {
 }
 
 # --- provisioning markers --------------------------------------------------
-mark() { # mark <role> <STATUS>
+mark() { # mark <role> <STATUS>   (RF_REV, if set by bootstrap, records the pinned rev)
   sudo mkdir -p "$MARKER_DIR"
-  echo "$2 $(date -u +%FT%TZ) rev=$(git -C "$RUSTIFLOW_DIR" rev-parse --short HEAD 2>/dev/null || echo '?')" \
+  echo "$2 $(date -u +%FT%TZ) rustiflow=${RF_REV:-?}" \
     | sudo tee "$MARKER_DIR/$1.status" >/dev/null
 }
 marker_status() { cat "$MARKER_DIR/$1.status" 2>/dev/null || echo "MISSING"; }

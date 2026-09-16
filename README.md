@@ -16,22 +16,40 @@ foundation the real throughput / packet-loss experiments get built on next.
 | Layer | Owned by | Artifact |
 |---|---|---|
 | **Provision** 2 nodes + 1 Gbps link | GENI RSpec / jFed | [`rspec/preflight.rspec`](rspec/preflight.rspec) |
-| **Configure** each node identically | `bootstrap.sh` + **Nix** | [`bootstrap.sh`](bootstrap.sh) + RustiFlow's own `flake.lock` |
+| **Configure** each node identically | `bootstrap.sh` + **Nix** | [`bootstrap.sh`](bootstrap.sh) + [`flake.lock`](flake.lock) |
 | **Run** the smoke test | `preflight.sh` + `just` | [`preflight.sh`](preflight.sh), [`justfile`](justfile) |
 
 The Virtual Wall has no Terraform/Nix provider — provisioning goes through the GENI
 Aggregate Manager, whose declarative artifact is the RSpec. So the RSpec is a
-committed file, swapped in headlessly. Nix owns the *middle* layer: the exact
-RustiFlow toolchain is pinned by RustiFlow's committed `flake.lock`, built on the
-node. The RSpec's `<services>` block is deliberately thin — it only clones this repo
-and calls `bootstrap.sh`; all real logic is version-controlled here.
+committed file, swapped in headlessly. Nix owns the *middle* layer: this repo's
+[`flake.lock`](flake.lock) pins **both** the exact RustiFlow source revision (the
+`rustiflow` input) **and** the build toolchain (nightly + `bpf-linker`), and
+`bootstrap.sh` builds that pinned source on the node. The RSpec's `<services>` block
+is deliberately thin — it only clones this repo and calls `bootstrap.sh`; all real
+logic is version-controlled here.
+
+### How RustiFlow is pinned
+
+RustiFlow is a **flake input**, so its commit is recorded in `flake.lock` — not a
+mutable `git checkout main`. Bump it with `nix flake update rustiflow` (or point the
+input at your own fork/branch in `flake.nix` and re-lock), then commit `flake.lock`.
+
+It is a *source-only* input (`flake = false`) because RustiFlow upstream ships no
+`flake.nix`, so this repo's flake owns the build toolchain (kept in sync with
+RustiFlow's local dev flake). We deliberately do **not** package RustiFlow as a
+`nix build .#rustiflow` derivation: its eBPF build needs `-Z build-std=core` +
+`bpf-linker` + an `xtask` that embeds the compiled eBPF into the userspace binary,
+which upstream builds via a devShell, not a package. `bootstrap.sh` copies the
+lockfile-pinned source to a writable tree and builds it in that same pinned shell.
 
 ## Quick start
 
 1. **Push this repo** somewhere the nodes can reach, and set the URL in two places:
    - `VWALL_REPO` in [`config.env`](config.env)
    - the `git clone …` URLs in [`rspec/preflight.rspec`](rspec/preflight.rspec) (both nodes)
-   - (optional) pin `RUSTIFLOW_REV` to a commit SHA in `config.env` for full reproducibility.
+
+   (The RustiFlow revision is already pinned in `flake.lock` — see *How RustiFlow
+   is pinned* above; `nix flake update rustiflow` to bump it.)
 
 2. **Swap in** the topology — load `rspec/preflight.rspec` in the jFed GUI and hit
    Run, or `just up` if you have the jFed CLI. At swap-in each node self-provisions
@@ -82,8 +100,8 @@ packets *on this node's kernel* — the thing most likely to break on a testbed 
   hand-run `tc`.
 - **Interface discovery by IP**, not a hardcoded `ethX` — vwall interface names vary
   per swap-in.
-- **On-node Nix build** so the eBPF objects match the running kernel and the
-  toolchain is pinned by RustiFlow's `flake.lock`.
+- **On-node Nix build** so the eBPF objects match the running kernel, with both
+  the RustiFlow source revision and the toolchain pinned by this repo's `flake.lock`.
 
 ## Files
 

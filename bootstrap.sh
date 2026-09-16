@@ -48,17 +48,21 @@ fi
 command -v nix >/dev/null 2>&1 || die "nix not on PATH after install"
 
 # 4. RustiFlow ----------------------------------------------------------------
-log "fetching RustiFlow ($RUSTIFLOW_REPO @ $RUSTIFLOW_REV)"
-mkdir -p "$(dirname "$RUSTIFLOW_DIR")"
-if [ ! -d "$RUSTIFLOW_DIR/.git" ]; then
-  git clone "$RUSTIFLOW_REPO" "$RUSTIFLOW_DIR"
-fi
-git -C "$RUSTIFLOW_DIR" fetch --all --tags -q
-git -C "$RUSTIFLOW_DIR" checkout -q "$RUSTIFLOW_REV"
+# Source revision is pinned in flake.lock (the `rustiflow` input); resolve it to
+# a store path and copy it out to a writable tree (cargo needs to write there).
+log "resolving pinned RustiFlow source from flake.lock"
+RF_STORE="$(nix build "$VWALL_DIR#rustiflow-src" --no-link --print-out-paths)"
+RF_REV="$(cat "$(nix build "$VWALL_DIR#rustiflow-rev" --no-link --print-out-paths)")"
+export RF_REV
+log "RustiFlow pinned at rev $RF_REV"
 
-log "building RustiFlow (eBPF + userspace) via its pinned flake — this can take a while"
+rm -rf "$RUSTIFLOW_DIR"
+mkdir -p "$(dirname "$RUSTIFLOW_DIR")"
+cp -rT --no-preserve=mode,ownership "$RF_STORE" "$RUSTIFLOW_DIR"
+
+log "building RustiFlow (eBPF + userspace) in the pinned toolchain shell — this can take a while"
 ( cd "$RUSTIFLOW_DIR"
-  nix develop --command bash -lc '
+  nix develop "$VWALL_DIR#rustiflow" --command bash -lc '
     set -euo pipefail
     cargo xtask ebpf-ipv4
     cargo xtask ebpf-ipv6
