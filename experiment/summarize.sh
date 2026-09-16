@@ -14,20 +14,23 @@ source "$ROOT/config.env"
 # shellcheck source=../lib.sh
 source "$ROOT/lib.sh"
 
-EXP="${1:-$(experiment_name)}"
+# RUN may be "<exp>" or "<exp>/<featureset>" (runs are stored per feature set).
+RUN="${1:-$(experiment_name)}"
 SHARE="$(shared_dir 2>/dev/null || true)"
+list_runs() { find "$SHARE/rustiflow-oom" /local/rustiflow-oom -name victim.csv 2>/dev/null \
+  | sed 's#.*/rustiflow-oom/##; s#/victim.csv##' | sort -u | sed 's/^/  /'; }
 D=""
 for base in "$SHARE" /local; do
-  [ -n "$base" ] && [ -d "$base/rustiflow-oom/$EXP" ] && { D="$base/rustiflow-oom/$EXP"; break; }
+  [ -n "$base" ] && [ -f "$base/rustiflow-oom/$RUN/victim.csv" ] && { D="$base/rustiflow-oom/$RUN"; break; }
 done
 if [ -z "$D" ]; then
-  echo "no results for experiment '$EXP'."
-  echo "available runs:"; ls -1 "$SHARE/rustiflow-oom/" /local/rustiflow-oom/ 2>/dev/null | sort -u | sed 's/^/  /'
+  echo "no results for run '$RUN'."
+  echo "available runs (pass one as the argument):"; list_runs
   exit 1
 fi
 
 echo "======================================================"
-echo " RustiFlow OOM experiment: $EXP"
+echo " RustiFlow OOM experiment: $RUN"
 echo " $D"
 echo "======================================================"
 

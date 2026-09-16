@@ -31,14 +31,15 @@ source "$ROOT/config.env"
 source "$ROOT/lib.sh"
 
 EXP="$(experiment_name)"
+LABEL="${RUN_LABEL:-$EXP_FEATURES}"   # per-run subdir so feature sets don't clobber
 SHARE="$(shared_dir || true)"
-LOCAL="/local/rustiflow-oom/$EXP"
+LOCAL="/local/rustiflow-oom/$EXP/$LABEL"
 mkdir -p "$LOCAL"
-if [ -n "$SHARE" ]; then RUNDIR="$SHARE/rustiflow-oom/$EXP"; mkdir -p "$RUNDIR"; else
+if [ -n "$SHARE" ]; then RUNDIR="$SHARE/rustiflow-oom/$EXP/$LABEL"; mkdir -p "$RUNDIR"; else
   warn "no NFS share found — results stay in $LOCAL, and cross-node coordination is unavailable"
   RUNDIR="$LOCAL"
 fi
-log "experiment=$EXP role=$ROLE rundir=$RUNDIR"
+log "experiment=$EXP label=$LABEL role=$ROLE rundir=$RUNDIR"
 
 BIN="$RUSTIFLOW_DIR/target/release/rustiflow"
 PG=/proc/net/pktgen
