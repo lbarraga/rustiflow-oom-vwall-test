@@ -66,6 +66,12 @@ experiment_ifconfig_data() {
   for t in /usr/local/etc/emulab/bin/tmcc /usr/local/etc/emulab/tmcc "$(command -v tmcc 2>/dev/null)"; do
     [ -n "$t" ] && [ -x "$t" ] && { sudo "$t" ifconfig 2>/dev/null; return 0; }
   done
+  # last resort: emulab's rc.ifconfig echoes the INTERFACE lines (INET/MASK/MAC)
+  # even when it can't apply them (IFACE= empty after the HWE kernel rename).
+  if [ -x /usr/local/etc/emulab/rc/rc.ifconfig ]; then
+    sudo /usr/local/etc/emulab/rc/rc.ifconfig 2>&1
+    return 0
+  fi
   return 0
 }
 
@@ -73,7 +79,9 @@ ensure_experiment_iface() {
   local data line inet mask mac cmac dev prefix
   data="$(experiment_ifconfig_data)"
   [ -n "$data" ] || { warn "no emulab interface data found; skipping iface config"; return 0; }
-  printf '%s\n' "$data" | grep -i '^INTERFACE' | while IFS= read -r line; do
+  # Match any line carrying both INET= and MAC= — covers tmcc's "INTERFACE ..."
+  # lines and rc.ifconfig's "*** WARNING: Bad ifconfig line: INTERFACE ..." echoes.
+  printf '%s\n' "$data" | grep -iE 'INET=[0-9.]+.*MAC=[0-9a-fA-F]+' | while IFS= read -r line; do
     inet="$(sed -n 's/.*INET=\([0-9.][0-9.]*\).*/\1/p' <<<"$line")"
     mask="$(sed -n 's/.*MASK=\([0-9.][0-9.]*\).*/\1/p' <<<"$line")
     mac="$(sed -n 's/.*MAC=\([0-9a-fA-F][0-9a-fA-F]*\).*/\1/p' <<<"$line")
