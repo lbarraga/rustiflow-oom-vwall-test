@@ -26,6 +26,12 @@ source "$HERE/config.env"
 # shellcheck source=lib.sh
 source "$HERE/lib.sh"
 
+# The systemd resume unit runs this as root with a minimal environment (no HOME,
+# no USER). Nix's profile script, cargo and git all need HOME, and `set -u` would
+# turn an unset HOME into a fatal error — so pin sane values up front.
+export HOME="${HOME:-/root}"
+export USER="${USER:-$(id -un)}"
+
 RESUME_UNIT="rustiflow-bootstrap.service"
 READY_SENTINEL="$MARKER_DIR/$ROLE.ready"
 
@@ -42,6 +48,8 @@ ConditionPathExists=!$READY_SENTINEL
 
 [Service]
 Type=oneshot
+Environment=HOME=/root
+Environment=USER=root
 ExecStart=/bin/bash -lc '$HERE/bootstrap.sh $ROLE >> /local/bootstrap.log 2>&1'
 TimeoutStartSec=0
 
@@ -86,12 +94,19 @@ if ! command -v nix >/dev/null 2>&1; then
   curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix \
     | sh -s -- install linux --no-confirm --init systemd
 fi
-# make nix available in this non-login shell
+# make nix available in this non-login shell (the profile script references $HOME
+# and other unset vars, so relax `set -u` just around the source)
 if [ -f /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]; then
+  set +u
   # shellcheck disable=SC1091
   source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+  set -u
 fi
 command -v nix >/dev/null 2>&1 || die "nix not on PATH after install"
+
+# The harness repo was cloned by the swap-in user; the build runs as root, so git
+# would refuse the flake dir as "dubious ownership". Whitelist it (needs HOME set).
+git config --global --add safe.directory "$VWALL_DIR" 2>/dev/null || true
 
 # 5. RustiFlow ----------------------------------------------------------------
 # Source revision is pinned in flake.lock (the `rustiflow` input); resolve it to
