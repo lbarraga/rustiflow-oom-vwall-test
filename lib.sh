@@ -57,8 +57,15 @@ mask2prefix() {
   esac
 }
 
-# Emulab's cached interface config (no network needed), with a tmcc fallback.
+# Emulab's intended interface config as INET/MASK/MAC lines. rc.ifconfig is the
+# proven source on these nodes (it echoes the INTERFACE lines even when it can't
+# apply them — IFACE= empty after the HWE kernel rename), so try it FIRST; the
+# tmcc cache paths were guesses that didn't pan out, kept only as fallbacks.
 experiment_ifconfig_data() {
+  if [ -x /usr/local/etc/emulab/rc/rc.ifconfig ]; then
+    sudo /usr/local/etc/emulab/rc/rc.ifconfig 2>&1
+    return 0
+  fi
   local f t
   for f in /var/emulab/boot/tmcc/ifconfig /var/emulab/boot/tmcc.ifconfig; do
     [ -r "$f" ] && { cat "$f"; return 0; }
@@ -66,12 +73,6 @@ experiment_ifconfig_data() {
   for t in /usr/local/etc/emulab/bin/tmcc /usr/local/etc/emulab/tmcc "$(command -v tmcc 2>/dev/null)"; do
     [ -n "$t" ] && [ -x "$t" ] && { sudo "$t" ifconfig 2>/dev/null; return 0; }
   done
-  # last resort: emulab's rc.ifconfig echoes the INTERFACE lines (INET/MASK/MAC)
-  # even when it can't apply them (IFACE= empty after the HWE kernel rename).
-  if [ -x /usr/local/etc/emulab/rc/rc.ifconfig ]; then
-    sudo /usr/local/etc/emulab/rc/rc.ifconfig 2>&1
-    return 0
-  fi
   return 0
 }
 
@@ -112,10 +113,16 @@ shared_dir() {
   return 1
 }
 
-# Experiment name = the slice name embedded in the node FQDN
-# (node0.<exp>.<...>), identical on every node in the experiment, unique per
-# swap-in — so both nodes derive the same run directory with no coordination.
-experiment_name() { hostname -f 2>/dev/null | cut -d. -f2; }
+# Experiment (slice/eid) name, identical on every node in the experiment and
+# unique per swap-in — so both nodes derive the same run directory with no
+# coordination. Emulab's nickname file is authoritative (vname.eid.pid); fall
+# back to the FQDN only if it is missing.
+experiment_name() {
+  local eid
+  eid="$(cut -d. -f2 /var/emulab/boot/nickname 2>/dev/null)"
+  [ -n "$eid" ] && { echo "$eid"; return 0; }
+  hostname -f 2>/dev/null | cut -d. -f2
+}
 
 # --- provisioning markers --------------------------------------------------
 mark() { # mark <role> <STATUS>   (RF_REV, if set by bootstrap, records the pinned rev)

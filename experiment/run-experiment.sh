@@ -48,8 +48,11 @@ case "$ROLE" in
   attacker) SELF_IP="$ATTACKER_IP" ;;
   *) die "role must be victim or attacker" ;;
 esac
+# configure the experiment NIC ourselves (don't depend on bootstrap having done it;
+# the HWE-reboot leaves it down and emulab's rc.ifconfig can't reapply it)
+ensure_experiment_iface || warn "experiment iface config was best-effort only"
 DEV="$(iface_for_ip "${SELF_IP%.*}.")"
-[ -n "$DEV" ] || die "no experiment interface carries ${SELF_IP%.*}.x"
+[ -n "$DEV" ] || die "no experiment interface carries ${SELF_IP%.*}.x (iface config failed)"
 
 # --- flag helpers (coordination via the shared dir) ------------------------
 flag()      { date -u +%FT%TZ > "$RUNDIR/$1" 2>/dev/null || true; }
@@ -67,7 +70,7 @@ nic_rx() { # -> "rx_packets rx_dropped rx_missed"
 
 # ===========================================================================
 run_victim() {
-  echo -1000 | sudo tee /proc/self/oom_score_adj >/dev/null   # never OOM-kill the sampler
+  echo -1000 | sudo tee /proc/$$/oom_score_adj >/dev/null   # never OOM-kill the sampler
   flag victim_provisioned
   log "waiting for the attacker to finish provisioning..."
   wait_flag attacker_provisioned 900 || warn "attacker not provisioned in time — starting anyway"
@@ -155,7 +158,7 @@ pktgen_sofar() { local t s=0 n; for t in $(seq 0 $((FLOOD_THREADS-1))); do
   s=$((s + ${n:-0})); done; echo "$s"; }
 
 run_attacker() {
-  echo -1000 | sudo tee /proc/self/oom_score_adj >/dev/null
+  echo -1000 | sudo tee /proc/$$/oom_score_adj >/dev/null
   flag attacker_provisioned
   log "waiting for victim to start RustiFlow..."
   wait_flag victim_ready 900 || { warn "victim never became ready — aborting flood"; flag attacker_done; return 1; }
