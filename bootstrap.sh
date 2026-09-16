@@ -130,8 +130,10 @@ log "building RustiFlow (eBPF + userspace) in the pinned toolchain shell — thi
 ( cd "$RUSTIFLOW_DIR"
   nix develop "$VWALL_DIR#rustiflow" --command bash -lc '
     set -euo pipefail
-    cargo xtask ebpf-ipv4
-    cargo xtask ebpf-ipv6
+    # eBPF objects MUST match the userspace profile: the release binary loads them
+    # from target/bpfel-unknown-none/release/ (see ebpf_binary_path in realtime.rs).
+    cargo xtask ebpf-ipv4 --release
+    cargo xtask ebpf-ipv6 --release
     cargo build --release
   '
 )

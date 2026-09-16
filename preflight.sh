@@ -118,8 +118,13 @@ if [ -x "$BIN" ] && [ -n "$IFACE" ]; then
 
   wait "$RF_PID" 2>/dev/null   # timeout ends it; exit status is expected non-zero
 
-  # evaluate the capture
-  if [ -s "$CSV" ]; then
+  # evaluate the capture. NOTE: rustiflow creates the CSV + header *before* it
+  # loads the eBPF, so "CSV exists" does NOT mean the program loaded — check the
+  # log for a runtime/load error first.
+  if grep -qiE 'Failed to load eBPF|Error during realtime processing|panicked|Permission denied' "$RLOG"; then
+    REASON="$(grep -iE 'Failed to load eBPF|Error during realtime processing|panicked|Permission denied' "$RLOG" | head -n1 | cut -c1-90)"
+    bad "rustiflow eBPF load" "$REASON"
+  elif [ -s "$CSV" ]; then
     ROWS=$(( $(wc -l <"$CSV") - 1 )); [ "$ROWS" -lt 0 ] && ROWS=0
     ok "rustiflow eBPF load" "capture ran, CSV written"
     if [ "$ROWS" -gt 0 ]; then
