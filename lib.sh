@@ -77,7 +77,7 @@ experiment_ifconfig_data() {
 }
 
 ensure_experiment_iface() {
-  local data line inet mask mac cmac dev prefix
+  local data="" line="" inet="" mask="" mac="" cmac="" dev="" prefix=""
   data="$(experiment_ifconfig_data)"
   [ -n "$data" ] || { warn "no emulab interface data found; skipping iface config"; return 0; }
   # Match any line carrying both INET= and MAC= — covers tmcc's "INTERFACE ..."
