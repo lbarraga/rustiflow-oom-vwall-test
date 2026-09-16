@@ -83,23 +83,18 @@ fi
 # window, so flows are guaranteed; on the victim, flows appear if the attacker
 # runs concurrently (a bonus — an empty-but-loaded capture still proves eBPF works).
 if [ -x "$BIN" ] && [ -n "$IFACE" ]; then
-  # Use a private (non-sticky) temp DIR, not a pre-made file in /tmp: rustiflow
-  # runs as root, and fs.protected_regular blocks root from re-creating a file it
-  # doesn't own inside sticky /tmp. Letting root create the file fresh here avoids
-  # that. The dir is ours, so cleanup can still unlink the root-owned CSV.
-  CAPDIR="$(mktemp -d /tmp/rf.XXXXXX)"
-  CSV="$CAPDIR/flows.csv"; RLOG="$CAPDIR/rf.log"
+  RLOG="$(mktemp /tmp/rf.XXXXXX.log)"
   log "starting ${CAP_SECS}s eBPF capture on $IFACE"
-  # rustiflow only flushes its buffered flows on graceful shutdown, which it
-  # triggers on SIGINT (realtime.rs waits on ctrl_c). timeout's default SIGTERM
-  # would kill it before the flush, losing every row — so send SIGINT (-s INT),
-  # with a SIGKILL backstop (-k) if graceful shutdown hangs.
-  # RUST_LOG=info surfaces the "Attached ... tc classifier" lines and the per-hook
-  # "matched_packets=N" counters — a direct capture signal that doesn't depend on
-  # flow expiry/flush. (info, not debug: debug would disable packet-graph mode.)
-  sudo RUST_LOG=info timeout -k 5 -s INT "$CAP_SECS" "$BIN" \
-      --features basic --output csv --export-path "$CSV" --header --packet-graph \
-      --early-export 2 --idle-timeout 5 --expiration-check-interval 2 \
+  # Print mode (not CSV). rustiflow only flushes/prints on SIGINT graceful shutdown
+  # (realtime.rs waits on ctrl_c), so send SIGINT (-s INT) with a generous SIGKILL
+  # backstop (-k 20) — CSV+packet-graph shutdown could outrun a short backstop and
+  # get killed before the counters print. Print mode also sidesteps the sticky-/tmp
+  # root-create issue. RUST_LOG=info surfaces "Attached ... tc classifier" and the
+  # per-hook "matched_packets=N" counters (the direct capture signal); flows print
+  # to stdout. (info, not debug: debug changes realtime behaviour.)
+  sudo RUST_LOG=info timeout -k 20 -s INT "$CAP_SECS" "$BIN" \
+      --features basic --output print \
+      --idle-timeout 5 --expiration-check-interval 2 \
       realtime "$IFACE" >"$RLOG" 2>&1 &
   RF_PID=$!
 
@@ -130,9 +125,9 @@ if [ -x "$BIN" ] && [ -n "$IFACE" ]; then
   elif grep -qi 'Attached IPv4 tc classifier' "$RLOG"; then
     ok "rustiflow eBPF load" "tc classifiers attached (ingress+egress)"
     MATCHED="$(grep -oE 'matched_packets=[0-9]+' "$RLOG" | awk -F= '{s+=$2} END{print s+0}')"
-    ROWS=0; [ -s "$CSV" ] && ROWS=$(( $(wc -l <"$CSV") - 1 )); [ "$ROWS" -lt 0 ] && ROWS=0
+    FLOWS="$(grep -cE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+-' "$RLOG" 2>/dev/null || echo 0)"
     if [ "${MATCHED:-0}" -gt 0 ]; then
-      ok "rustiflow live capture" "$MATCHED packets matched, $ROWS flow(s)"
+      ok "rustiflow live capture" "$MATCHED packets matched, $FLOWS flow(s)"
     elif [ "$ROLE" = "attacker" ]; then
       bad "rustiflow live capture" "0 packets matched despite iperf3 traffic — investigate"
     else
@@ -145,7 +140,7 @@ if [ -x "$BIN" ] && [ -n "$IFACE" ]; then
   if grep -q FAIL <<<"${_RESULTS[*]}" && [ -f "$RLOG" ]; then
     echo "---- rustiflow capture log tail ($RLOG) ----"; tail -n 20 "$RLOG"; echo "--------------------------------------------"
   fi
-  rm -rf "$CAPDIR"
+  rm -f "$RLOG"
 fi
 
 # --- report -----------------------------------------------------------------
