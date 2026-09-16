@@ -65,20 +65,18 @@ if [ -f "$D/attacker.csv" ]; then
   }' "$D/attacker.csv"
 fi
 
-# rough loss estimate: sent vs what reached the victim NIC
-if [ -f "$D/attacker.csv" ] && [ -f "$D/victim.csv" ]; then
-  SENT=$(awk -F, 'NR>1{s=$2}END{print s+0}' "$D/attacker.csv")
-  RXD=$(awk -F, 'NR>1 && $7!=""{if(a=="")a=$7;b=$7}END{print (b+0)-(a+0)}' "$D/victim.csv")
-  if [ "${SENT:-0}" -gt 0 ]; then
-    awk -v s="$SENT" -v r="$RXD" 'BEGIN{
-      printf "[loss estimate]\n"
-      printf "  sent (attacker)     : %d\n", s
-      printf "  arrived at NIC (Δ)  : %d\n", r
-      printf "  not counted at NIC  : %d  (%.1f%%)\n", s-r, (s>0?100*(s-r)/s:0)
-      print "  (rx_dropped/rx_missed above = NIC drops when the host couldn'\''t drain)"
-      print ""
-    }'
-  fi
+# Measured NIC-level drop. (We deliberately do NOT subtract attacker "sent" from
+# victim rx_packets: they cover different time windows — the attacker floods until
+# it sees victim_done, past the victim's death — so that difference is meaningless.
+# rx_missed is the one trustworthy measured drop; the eBPF ring-buffer drops from a
+# saturated user space are the likely-dominant loss but were not instrumented.)
+if [ -f "$D/victim.csv" ]; then
+  awk -F, 'NR>1 && $9!=""{m=$9} NR>1{s=$2} END{
+    printf "[NIC-level loss]\n"
+    printf "  rx_missed (measured): %s packets — host could not drain the NIC in time\n", m
+    print  "  (true capture loss is higher: eBPF ring-buffer drops not instrumented)"
+    print ""
+  }' "$D/victim.csv"
 fi
 
 echo "[OOM evidence]"
