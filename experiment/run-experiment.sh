@@ -89,6 +89,13 @@ run_victim() {
   local csv="$LOCAL/victim.csv"
   echo "ts_unix,rf_rss_kb,rf_swap_kb,mem_avail_kb,mem_free_kb,swap_free_kb,rx_packets,rx_dropped,rx_missed" > "$csv"
 
+  # Disable swap so the kernel OOM-kills the instant RAM is exhausted, instead of
+  # thrashing on swap for minutes first. Then time-to-OOM == time-to-fill-RAM.
+  if [ "${DISABLE_SWAP:-1}" = "1" ]; then
+    log "disabling swap (swapoff -a) — OOM will fire at RAM exhaustion, no swap tail"
+    sudo swapoff -a 2>/dev/null || warn "swapoff -a failed (continuing with swap on)"
+  fi
+
   log "starting RustiFlow (features=$EXP_FEATURES) on $DEV — as intended, no memory cap"
   sudo "$BIN" --features "$EXP_FEATURES" --output print realtime "$DEV" \
       >/dev/null 2>"$LOCAL/rf.stderr.log" &
@@ -102,7 +109,7 @@ run_victim() {
 
   { echo "experiment=$EXP"; echo "role=victim"; echo "host=$(hostname -f)";
     echo "kernel=$(uname -r)"; echo "features=$EXP_FEATURES"; echo "iface=$DEV";
-    echo "rf_pid=$rfpid"; echo "start_unix=$(date +%s)";
+    echo "rf_pid=$rfpid"; echo "swap_disabled=${DISABLE_SWAP:-1}"; echo "start_unix=$(date +%s)";
   } > "$LOCAL/meta-victim.txt"
 
   flag victim_ready
@@ -126,6 +133,7 @@ run_victim() {
   done
   local end; end="$(date +%s)"
   log "RustiFlow ended (oom_killed=$oom) after $((end-start))s"
+  [ "${DISABLE_SWAP:-1}" = "1" ] && { sudo swapon -a 2>/dev/null || true; }   # restore node swap
 
   { echo "=== dmesg (oom) ==="; dmesg 2>/dev/null | grep -iE 'out of memory|killed process|oom-kill' | tail -n 30;
     echo "=== journal -k (oom) ==="; journalctl -k --no-pager 2>/dev/null | grep -iE 'out of memory|killed process|oom-kill' | tail -n 30;
