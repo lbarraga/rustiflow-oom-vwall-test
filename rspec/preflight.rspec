@@ -1,0 +1,68 @@
+<?xml version='1.0'?>
+<!--
+  rustiflow-vwall preflight topology — imec Virtual Wall 2.
+
+    node0 = victim    (10.0.1.1)  runs RustiFlow + iperf3 server
+    node1 = attacker  (10.0.1.2)  drives ping/iperf3, runs RustiFlow too
+    link0             dedicated, isolated layer-2 VLAN, capped at 1 Gbps
+
+  Design notes:
+  * Ubuntu 22.04 (kernel 5.15) is used ON PURPOSE: its stock kernel already
+    satisfies RustiFlow's >= 5.8 eBPF requirement, so there is NO manual
+    HWE-kernel install + reboot step (unlike Ubuntu 20.04). Verify the URN
+    resolves on wall2 before your first run; fall back to UBUNTU20 + HWE +
+    reboot if not (see README).
+  * The <services> block is intentionally thin: it only clones this repo and
+    hands off to bootstrap.sh. All real provisioning logic is version-controlled
+    in the script, not buried in XML strings.
+  * The 1 Gbps cap is declarative via <property capacity="1000000"> (kbit/s),
+    both directions — no manual `tc`.
+
+  BEFORE RUNNING: push this repo and set the clone URL below (VWALL_REPO in
+  config.env must match). Swap in with jFed (load this file) or `just up`.
+-->
+<rspec xmlns="http://www.geni.net/resources/rspec/3" type="request" generated_by="rustiflow-vwall"
+       xmlns:emulab="http://www.protogeni.net/resources/rspec/ext/emulab/1"
+       xmlns:jfed="http://jfed.iminds.be/rspec/ext/jfed/1"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.geni.net/resources/rspec/3 http://www.geni.net/resources/rspec/3/request.xsd">
+
+  <!-- ============================ VICTIM (node0) ============================ -->
+  <node client_id="node0" exclusive="true"
+        component_manager_id="urn:publicid:IDN+wall2.ilabt.iminds.be+authority+cm">
+    <sliver_type name="raw-pc">
+      <disk_image name="urn:publicid:IDN+wall2.ilabt.iminds.be+image+emulab-ops:UBUNTU22-64-STD"/>
+    </sliver_type>
+    <services>
+      <execute shell="sh" command="sudo apt-get update ; sudo apt-get install -y git ; git clone https://github.com/YOURUSER/rustiflow-vwall.git /local/rustiflow-vwall &amp;&amp; /local/rustiflow-vwall/bootstrap.sh victim &gt; /local/bootstrap.log 2&gt;&amp;1"/>
+    </services>
+    <interface client_id="node0:if0">
+      <ip address="10.0.1.1" netmask="255.255.255.0" type="ipv4"/>
+    </interface>
+  </node>
+
+  <!-- ============================ ATTACKER (node1) ========================== -->
+  <node client_id="node1" exclusive="true"
+        component_manager_id="urn:publicid:IDN+wall2.ilabt.iminds.be+authority+cm">
+    <sliver_type name="raw-pc">
+      <disk_image name="urn:publicid:IDN+wall2.ilabt.iminds.be+image+emulab-ops:UBUNTU22-64-STD"/>
+    </sliver_type>
+    <services>
+      <execute shell="sh" command="sudo apt-get update ; sudo apt-get install -y git ; git clone https://github.com/YOURUSER/rustiflow-vwall.git /local/rustiflow-vwall &amp;&amp; /local/rustiflow-vwall/bootstrap.sh attacker &gt; /local/bootstrap.log 2&gt;&amp;1"/>
+    </services>
+    <interface client_id="node1:if0">
+      <ip address="10.0.1.2" netmask="255.255.255.0" type="ipv4"/>
+    </interface>
+  </node>
+
+  <!-- ====================== DEDICATED 1 Gbps LINK ========================== -->
+  <link client_id="link0">
+    <component_manager name="urn:publicid:IDN+wall2.ilabt.iminds.be+authority+cm"/>
+    <link_type name="lan"/>
+    <interface_ref client_id="node0:if0"/>
+    <interface_ref client_id="node1:if0"/>
+    <property source_id="node0:if0" dest_id="node1:if0" capacity="1000000"/>
+    <property source_id="node1:if0" dest_id="node0:if0" capacity="1000000"/>
+  </link>
+
+</rspec>

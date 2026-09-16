@@ -1,0 +1,11 @@
+# local experiment output — real data lives on the vwall NFS project share
+/results/
+*.log
+*.csv
+
+# nix
+result
+result-*
+
+# direnv
+/.direnv/
