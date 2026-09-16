@@ -94,7 +94,10 @@ if [ -x "$BIN" ] && [ -n "$IFACE" ]; then
   # triggers on SIGINT (realtime.rs waits on ctrl_c). timeout's default SIGTERM
   # would kill it before the flush, losing every row — so send SIGINT (-s INT),
   # with a SIGKILL backstop (-k) if graceful shutdown hangs.
-  sudo timeout -k 5 -s INT "$CAP_SECS" "$BIN" \
+  # RUST_LOG=info surfaces the "Attached ... tc classifier" lines and the per-hook
+  # "matched_packets=N" counters — a direct capture signal that doesn't depend on
+  # flow expiry/flush. (info, not debug: debug would disable packet-graph mode.)
+  sudo RUST_LOG=info timeout -k 5 -s INT "$CAP_SECS" "$BIN" \
       --features basic --output csv --export-path "$CSV" --header --packet-graph \
       --early-export 2 --idle-timeout 5 --expiration-check-interval 2 \
       realtime "$IFACE" >"$RLOG" 2>&1 &
@@ -118,25 +121,25 @@ if [ -x "$BIN" ] && [ -n "$IFACE" ]; then
 
   wait "$RF_PID" 2>/dev/null   # timeout ends it; exit status is expected non-zero
 
-  # evaluate the capture. NOTE: rustiflow creates the CSV + header *before* it
-  # loads the eBPF, so "CSV exists" does NOT mean the program loaded — check the
-  # log for a runtime/load error first.
+  # evaluate from the log, not the CSV: "Attached ... tc classifier" proves the
+  # eBPF loaded+attached, and the summed matched_packets counters prove capture —
+  # both independent of whether any flow expired/flushed to the CSV.
   if grep -qiE 'Failed to load eBPF|Error during realtime processing|panicked|Permission denied' "$RLOG"; then
     REASON="$(grep -iE 'Failed to load eBPF|Error during realtime processing|panicked|Permission denied' "$RLOG" | head -n1 | cut -c1-90)"
     bad "rustiflow eBPF load" "$REASON"
-  elif [ -s "$CSV" ]; then
-    ROWS=$(( $(wc -l <"$CSV") - 1 )); [ "$ROWS" -lt 0 ] && ROWS=0
-    ok "rustiflow eBPF load" "capture ran, CSV written"
-    if [ "$ROWS" -gt 0 ]; then
-      ok "rustiflow live capture" "$ROWS flow record(s)"
+  elif grep -qi 'Attached IPv4 tc classifier' "$RLOG"; then
+    ok "rustiflow eBPF load" "tc classifiers attached (ingress+egress)"
+    MATCHED="$(grep -oE 'matched_packets=[0-9]+' "$RLOG" | awk -F= '{s+=$2} END{print s+0}')"
+    ROWS=0; [ -s "$CSV" ] && ROWS=$(( $(wc -l <"$CSV") - 1 )); [ "$ROWS" -lt 0 ] && ROWS=0
+    if [ "${MATCHED:-0}" -gt 0 ]; then
+      ok "rustiflow live capture" "$MATCHED packets matched, $ROWS flow(s)"
     elif [ "$ROLE" = "attacker" ]; then
-      bad "rustiflow live capture" "0 flows despite iperf3 traffic — investigate"
+      bad "rustiflow live capture" "0 packets matched despite iperf3 traffic — investigate"
     else
-      ok "rustiflow live capture" "0 flows (no peer traffic in window — loaded OK)"
+      ok "rustiflow live capture" "0 packets (no peer traffic in window — attach OK)"
     fi
   else
-    REASON="$(grep -Eio 'permission denied|failed to (load|attach)[^\n]*|not permitted|BTF[^\n]*|panicked[^\n]*' "$RLOG" | head -n1)"
-    bad "rustiflow eBPF load" "${REASON:-no CSV produced (see log below)}"
+    bad "rustiflow eBPF load" "no attach confirmation in log (see below)"
   fi
   # surface the capture log on any eBPF/capture problem, BEFORE cleanup
   if grep -q FAIL <<<"${_RESULTS[*]}" && [ -f "$RLOG" ]; then
