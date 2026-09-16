@@ -20,7 +20,12 @@ kernel_mm() { uname -r | grep -oE '^[0-9]+\.[0-9]+'; }
 # The experiment NIC name is not stable across swap-ins (eth1/eno1/enp8s0f0...),
 # so find it by the IPv4 address it carries on the experiment subnet.
 iface_for_ip() {
-  ip -o -4 addr show 2>/dev/null | awk -v ip="$1" '$4 ~ "^"ip"/" {print $2; exit}'
+  # $1 may be a full IPv4 (10.0.1.1) or a dotted prefix (10.0.1.); returns the
+  # dev whose address field (e.g. "10.0.1.1/24") starts with it. Dots are matched
+  # literally, and there is NO trailing "/" so a prefix match works too.
+  local pat
+  pat="$(printf '%s' "$1" | sed 's/\./\\./g')"
+  ip -o -4 addr show 2>/dev/null | awk -v p="^$pat" '$4 ~ p {print $2; exit}'
 }
 
 # --- internet access (NAT) -------------------------------------------------
