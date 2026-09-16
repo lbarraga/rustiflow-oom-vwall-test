@@ -1,6 +1,6 @@
 <?xml version='1.0'?>
 <!--
-  rustiflow-vwall preflight topology — imec Virtual Wall 2.
+  rustiflow-vwall experiment topology — imec Virtual Wall 2.
 
     node0 = victim    (10.0.1.1)  runs RustiFlow + iperf3 server
     node1 = attacker  (10.0.1.2)  drives ping/iperf3, runs RustiFlow too
@@ -19,8 +19,8 @@
   * The 1 Gbps cap is declarative via <property capacity="1000000"> (kbit/s),
     both directions — no manual `tc`.
 
-  BEFORE RUNNING: push this repo and set the clone URL below (VWALL_REPO in
-  config.env must match). Swap in with jFed (load this file) or `just up`.
+  BEFORE RUNNING: push this repo (public) and set the clone URL in the two git-clone
+  lines below. Swap in by loading this file in jFed.
 -->
 <rspec xmlns="http://www.geni.net/resources/rspec/3" type="request" generated_by="rustiflow-vwall"
        xmlns:emulab="http://www.protogeni.net/resources/rspec/ext/emulab/1"

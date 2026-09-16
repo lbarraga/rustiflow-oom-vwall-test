@@ -2,8 +2,8 @@
 # ---------------------------------------------------------------------------
 # bootstrap.sh <victim|attacker>
 #
-# Runs automatically at swap-in (invoked from rspec/preflight.rspec) and is safe
-# to re-run by hand (`just provision`). It leaves the node fully built and ready:
+# Runs automatically at swap-in (invoked from experiment.rspec) and is safe
+# to re-run by hand. It leaves the node fully built and ready:
 #
 #   1. enable IPv4 NAT              (internet for the steps below)
 #   2. ensure kernel >= MIN_KERNEL  (Virtual Wall 2's Ubuntu 20.04 ships 5.4;
@@ -13,7 +13,7 @@
 #   3. install base tools           (iperf3, ethtool, curl, git)
 #   4. install Nix                  (Determinate installer, flakes on)
 #   5. build RustiFlow              (flake.lock-pinned source + toolchain)
-#   6. write a provisioning marker  (so `just wait` / preflight know it is ready)
+#   6. write a provisioning marker  (status READY when done)
 #
 # All heavy lifting lives here, in version control — the rspec only kicks it off.
 # ---------------------------------------------------------------------------
@@ -66,7 +66,6 @@ EXP_UNIT="rustiflow-experiment.service"
 # OOMPolicy=continue: when the kernel OOM-kills RustiFlow, don't tear down the unit
 # (the sampler must keep running). Not enabled for boot; a sentinel prevents reruns.
 start_experiment() {
-  [ "${RUN_EXPERIMENT:-0}" = "1" ] || { log "RUN_EXPERIMENT=0 — skipping experiment"; return 0; }
   sudo tee "/etc/systemd/system/$EXP_UNIT" >/dev/null <<EOF
 [Unit]
 Description=RustiFlow OOM experiment ($ROLE)
@@ -79,7 +78,7 @@ Type=simple
 OOMPolicy=continue
 Environment=HOME=/root
 ExecStartPre=/bin/touch $MARKER_DIR/$ROLE.experiment-started
-ExecStart=/bin/bash -lc '$HERE/experiment/run-experiment.sh $ROLE >> /local/experiment.log 2>&1'
+ExecStart=/bin/bash -lc '$HERE/run-experiment.sh $ROLE >> /local/experiment.log 2>&1'
 
 [Install]
 WantedBy=multi-user.target

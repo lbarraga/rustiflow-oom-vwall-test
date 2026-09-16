@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # ---------------------------------------------------------------------------
-# Shared helpers for bootstrap.sh and preflight.sh.
+# Shared helpers for bootstrap.sh and run-experiment.sh.
 # Source after config.env.
 # ---------------------------------------------------------------------------
 
@@ -137,33 +137,4 @@ mark() { # mark <role> <STATUS>   (RF_REV, if set by bootstrap, records the pinn
   sudo mkdir -p "$MARKER_DIR"
   echo "$2 $(date -u +%FT%TZ) rustiflow=${RF_REV:-?}" \
     | sudo tee "$MARKER_DIR/$1.status" >/dev/null
-}
-marker_status() { cat "$MARKER_DIR/$1.status" 2>/dev/null || echo "MISSING"; }
-
-# --- check framework (used by preflight.sh) --------------------------------
-declare -a _RESULTS=()
-_PASS=0
-_FAIL=0
-ok()  { _RESULTS+=("PASS|$1|$2"); _PASS=$((_PASS+1)); }
-bad() { _RESULTS+=("FAIL|$1|$2"); _FAIL=$((_FAIL+1)); }
-
-# assert "name" "detail" <exit-status-of-a-test>  — convenience wrapper
-assert() { if [ "$3" -eq 0 ]; then ok "$1" "$2"; else bad "$1" "$2"; fi; }
-
-print_report() { # print_report <title>
-  echo
-  echo "============================================================"
-  echo " $1"
-  echo "============================================================"
-  printf '%-6s %-28s %s\n' "RESULT" "CHECK" "DETAIL"
-  printf '%-6s %-28s %s\n' "------" "-----" "------"
-  local r name detail status
-  for r in "${_RESULTS[@]}"; do
-    IFS='|' read -r status name detail <<<"$r"
-    printf '%-6s %-28s %s\n' "$status" "$name" "$detail"
-  done
-  echo "------------------------------------------------------------"
-  echo " $_PASS passed, $_FAIL failed"
-  echo "============================================================"
-  [ "$_FAIL" -eq 0 ]
 }
