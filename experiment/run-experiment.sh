@@ -55,9 +55,20 @@ DEV="$(iface_for_ip "${SELF_IP%.*}.")"
 [ -n "$DEV" ] || die "no experiment interface carries ${SELF_IP%.*}.x (iface config failed)"
 
 # --- flag helpers (coordination via the shared dir) ------------------------
-flag()      { date -u +%FT%TZ > "$RUNDIR/$1" 2>/dev/null || true; }
-wait_flag() { local f="$1" max="${2:-300}" i=0; until [ -e "$RUNDIR/$f" ]; do
-                sleep 1; i=$((i+1)); [ "$i" -ge "$max" ] && return 1; done; }
+flag() { date -u +%FT%TZ > "$RUNDIR/$1" 2>/dev/null || true; }
+# Poll for a peer-written flag. Crucial on NFS: re-stat-ing one path hits the
+# cached negative dentry forever, so force a READDIR (ls) each round to refresh
+# the dir cache; and use a wall-clock deadline (sleep can be unreliable here).
+wait_flag() {
+  local f="$1" max="${2:-300}" deadline
+  deadline=$(( $(date +%s) + max ))
+  while :; do
+    ls -a "$RUNDIR/" >/dev/null 2>&1
+    [ -e "$RUNDIR/$f" ] && return 0
+    [ "$(date +%s)" -ge "$deadline" ] && return 1
+    sleep 2
+  done
+}
 
 nic_rx() { # -> "rx_packets rx_dropped rx_missed"
   sudo ethtool -S "$DEV" 2>/dev/null | awk '
