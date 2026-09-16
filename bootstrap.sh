@@ -61,6 +61,34 @@ EOF
 }
 disable_resume_unit() { sudo systemctl disable "$RESUME_UNIT" >/dev/null 2>&1 || true; }
 
+EXP_UNIT="rustiflow-experiment.service"
+# Launch the OOM experiment as its own transient-ish unit so it outlives bootstrap.
+# OOMPolicy=continue: when the kernel OOM-kills RustiFlow, don't tear down the unit
+# (the sampler must keep running). Not enabled for boot; a sentinel prevents reruns.
+start_experiment() {
+  [ "${RUN_EXPERIMENT:-0}" = "1" ] || { log "RUN_EXPERIMENT=0 — skipping experiment"; return 0; }
+  sudo tee "/etc/systemd/system/$EXP_UNIT" >/dev/null <<EOF
+[Unit]
+Description=RustiFlow OOM experiment ($ROLE)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!$MARKER_DIR/$ROLE.experiment-started
+
+[Service]
+Type=simple
+OOMPolicy=continue
+Environment=HOME=/root
+ExecStartPre=/bin/touch $MARKER_DIR/$ROLE.experiment-started
+ExecStart=/bin/bash -lc '$HERE/experiment/run-experiment.sh $ROLE >> /local/experiment.log 2>&1'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  sudo systemctl daemon-reload
+  sudo systemctl start "$EXP_UNIT" >/dev/null 2>&1 || true
+  log "OOM experiment launched ($EXP_UNIT) — see /local/experiment.log"
+}
+
 trap 'mark "$ROLE" FAILED; die "bootstrap failed (see output above / /local/bootstrap.log)"' ERR
 
 mark "$ROLE" PROVISIONING
@@ -145,3 +173,6 @@ sudo touch "$READY_SENTINEL"      # stops the resume unit from ever running agai
 disable_resume_unit
 mark "$ROLE" READY
 log "READY — role=$ROLE  kernel=$(uname -r)  rustiflow=$RUSTIFLOW_DIR/target/release/rustiflow"
+
+# 7. kick off the experiment (self-coordinates with the peer via the NFS share) ---
+start_experiment

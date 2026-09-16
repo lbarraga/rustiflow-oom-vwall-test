@@ -100,6 +100,23 @@ ensure_experiment_iface() {
   return 0
 }
 
+# --- shared NFS project dir + per-swap-in run identity ---------------------
+# The vwall project NFS share is auto-mounted on all nodes and persists after the
+# experiment ends — the coordination bus AND the results sink.
+shared_dir() {
+  if [ -n "${SHARED_DIR:-}" ]; then echo "$SHARED_DIR"; return 0; fi
+  local d
+  for d in /groups/*/ /proj/*/; do
+    [ -d "$d" ] && { echo "${d%/}"; return 0; }
+  done
+  return 1
+}
+
+# Experiment name = the slice name embedded in the node FQDN
+# (node0.<exp>.<...>), identical on every node in the experiment, unique per
+# swap-in — so both nodes derive the same run directory with no coordination.
+experiment_name() { hostname -f 2>/dev/null | cut -d. -f2; }
+
 # --- provisioning markers --------------------------------------------------
 mark() { # mark <role> <STATUS>   (RF_REV, if set by bootstrap, records the pinned rev)
   sudo mkdir -p "$MARKER_DIR"
