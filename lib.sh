@@ -80,24 +80,28 @@ ensure_experiment_iface() {
   local data="" line="" inet="" mask="" mac="" cmac="" dev="" prefix=""
   data="$(experiment_ifconfig_data)"
   [ -n "$data" ] || { warn "no emulab interface data found; skipping iface config"; return 0; }
-  # Match any line carrying both INET= and MAC= — covers tmcc's "INTERFACE ..."
-  # lines and rc.ifconfig's "*** WARNING: Bad ifconfig line: INTERFACE ..." echoes.
-  printf '%s\n' "$data" | grep -iE 'INET=[0-9.]+.*MAC=[0-9a-fA-F]+' | while IFS= read -r line; do
-    inet="$(sed -n 's/.*INET=\([0-9.][0-9.]*\).*/\1/p' <<<"$line")"
-    mask="$(sed -n 's/.*MASK=\([0-9.][0-9.]*\).*/\1/p' <<<"$line")
-    mac="$(sed -n 's/.*MAC=\([0-9a-fA-F][0-9a-fA-F]*\).*/\1/p' <<<"$line")
+  # Loop in THIS shell (herestring, not a pipe) so logs and `ip` side-effects are
+  # not swallowed by a subshell. Match INTERFACE lines carrying both INET= and MAC=
+  # (tmcc's, and rc.ifconfig's "*** WARNING: Bad ifconfig line: INTERFACE ..." echo).
+  while IFS= read -r line; do
+    case "$line" in *INET=*MAC=*) ;; *) continue ;; esac
+    inet="$(printf '%s\n' "$line" | sed -n 's/.*INET=\([0-9.][0-9.]*\).*/\1/p')"
+    mask="$(printf '%s\n' "$line" | sed -n 's/.*MASK=\([0-9.][0-9.]*\).*/\1/p')"
+    mac="$(printf '%s\n'  "$line" | sed -n 's/.*MAC=\([0-9a-fA-F][0-9a-fA-F]*\).*/\1/p')"
     [ -n "$inet" ] && [ -n "$mac" ] || continue
-    cmac="$(sed 's/\(..\)/\1:/g; s/:$//' <<<"$mac" | tr 'A-F' 'a-f')"
-    dev="$(ip -o link 2>/dev/null | awk -v m="$cmac" 'tolower($0) ~ m {print $2}' | sed 's/[:@].*//' | head -n1)"
-    [ -n "$dev" ] || { warn "no local interface matches MAC $cmac (INET $inet)"; continue; }
+    cmac="$(printf '%s' "$mac" | sed 's/\(..\)/\1:/g; s/:$//' | tr 'A-F' 'a-f')"
+    dev="$(ip -o link 2>/dev/null | grep -i "$cmac" | head -n1 | cut -d: -f2 | tr -d ' ' | sed 's/@.*//')"
+    if [ -z "$dev" ]; then warn "no local NIC matches MAC $cmac (INET $inet)"; continue; fi
     prefix="$(mask2prefix "$mask")"
-    sudo ip link set dev "$dev" up || true
+    sudo ip link set dev "$dev" up 2>/dev/null || true
     if ip -o -4 addr show dev "$dev" 2>/dev/null | grep -qw "$inet"; then
       log "experiment iface $dev already has $inet/$prefix"
+    elif sudo ip addr add "$inet/$prefix" dev "$dev" 2>/dev/null; then
+      log "configured experiment iface $dev = $inet/$prefix"
     else
-      sudo ip addr add "$inet/$prefix" dev "$dev" && log "configured experiment iface $dev = $inet/$prefix"
+      warn "failed to add $inet/$prefix to $dev"
     fi
-  done
+  done <<< "$data"
   return 0
 }
 
