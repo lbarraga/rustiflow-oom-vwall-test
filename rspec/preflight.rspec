@@ -1,20 +1,18 @@
 <?xml version='1.0'?>
 <!--
-  rustiflow-vwall preflight topology — imec Virtual Wall 1.
+  rustiflow-vwall preflight topology — imec Virtual Wall 2.
 
     node0 = victim    (10.0.1.1)  runs RustiFlow + iperf3 server
     node1 = attacker  (10.0.1.2)  drives ping/iperf3, runs RustiFlow too
     link0             dedicated, isolated layer-2 VLAN, capped at 1 Gbps
 
   Design notes:
-  * Virtual Wall 1 + Ubuntu 24.04 (kernel 6.8) is used ON PURPOSE. RustiFlow's
-    eBPF ring buffers need kernel >= 5.8. Virtual Wall 2 only offers Ubuntu up to
-    20.04 (kernel 5.4 -> would need a manual HWE install + reboot), and its image
-    list has no UBUNTU22/24. Virtual Wall 1 has a 24.04 image, so we run here and
-    skip the reboot dance entirely.
-    ---> VERIFY the exact image URN in jFed (select the 24.04 image on a wall1
-         node, check the Raw RSpec). If the short name differs, fix the two
-         disk_image lines below. Fallback: wall2 + UBUNTU20-64-STD + HWE + reboot.
+  * Virtual Wall 2 + Ubuntu 20.04. Wall2 has no UBUNTU22/24 image, and wall1
+    (which does) is chronically full, so we stay on wall2's 20.04. Its stock
+    kernel is 5.4, but RustiFlow's eBPF ring buffers need >= 5.8 — so bootstrap.sh
+    installs the HWE kernel (5.15) and REBOOTS THE NODE AUTOMATICALLY, resuming
+    provisioning via a one-shot systemd unit. No manual reboot; just wait longer
+    for the node to reach READY (one extra reboot cycle).
   * The <services> block is intentionally thin: it only clones this repo and
     hands off to bootstrap.sh. All real provisioning logic is version-controlled
     in the script, not buried in XML strings.
@@ -32,9 +30,9 @@
 
   <!-- ============================ VICTIM (node0) ============================ -->
   <node client_id="node0" exclusive="true"
-        component_manager_id="urn:publicid:IDN+wall1.ilabt.iminds.be+authority+cm">
+        component_manager_id="urn:publicid:IDN+wall2.ilabt.iminds.be+authority+cm">
     <sliver_type name="raw-pc">
-      <disk_image name="urn:publicid:IDN+wall1.ilabt.iminds.be+image+emulab-ops:UBUNTU24-64-STD"/>
+      <disk_image name="urn:publicid:IDN+wall2.ilabt.iminds.be+image+emulab-ops:UBUNTU20-64-STD"/>
     </sliver_type>
     <services>
       <execute shell="sh" command="sudo apt-get update ; sudo apt-get install -y git ; git clone https://github.com/lbarraga/rustiflow-oom-vwall-test.git /local/rustiflow-oom-vwall-test &amp;&amp; /local/rustiflow-oom-vwall-test/bootstrap.sh victim &gt; /local/bootstrap.log 2&gt;&amp;1"/>
@@ -46,9 +44,9 @@
 
   <!-- ============================ ATTACKER (node1) ========================== -->
   <node client_id="node1" exclusive="true"
-        component_manager_id="urn:publicid:IDN+wall1.ilabt.iminds.be+authority+cm">
+        component_manager_id="urn:publicid:IDN+wall2.ilabt.iminds.be+authority+cm">
     <sliver_type name="raw-pc">
-      <disk_image name="urn:publicid:IDN+wall1.ilabt.iminds.be+image+emulab-ops:UBUNTU24-64-STD"/>
+      <disk_image name="urn:publicid:IDN+wall2.ilabt.iminds.be+image+emulab-ops:UBUNTU20-64-STD"/>
     </sliver_type>
     <services>
       <execute shell="sh" command="sudo apt-get update ; sudo apt-get install -y git ; git clone https://github.com/lbarraga/rustiflow-oom-vwall-test.git /local/rustiflow-oom-vwall-test &amp;&amp; /local/rustiflow-oom-vwall-test/bootstrap.sh attacker &gt; /local/bootstrap.log 2&gt;&amp;1"/>
@@ -60,7 +58,7 @@
 
   <!-- ====================== DEDICATED 1 Gbps LINK ========================== -->
   <link client_id="link0">
-    <component_manager name="urn:publicid:IDN+wall1.ilabt.iminds.be+authority+cm"/>
+    <component_manager name="urn:publicid:IDN+wall2.ilabt.iminds.be+authority+cm"/>
     <link_type name="lan"/>
     <interface_ref client_id="node0:if0"/>
     <interface_ref client_id="node1:if0"/>

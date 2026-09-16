@@ -2,7 +2,7 @@
 #
 # SSH targets come from the jFed manifest after swap-in (user@hostname). Pass
 # them on the CLI, e.g.:
-#   just check victim=me@n081-01.wall1.ilabt.iminds.be attacker=me@n081-02.wall1.ilabt.iminds.be
+#   just check victim=me@n081-01.wall2.ilabt.iminds.be attacker=me@n081-02.wall2.ilabt.iminds.be
 # or export VICTIM=... ATTACKER=... once.
 
 set dotenv-load := true

@@ -91,14 +91,13 @@ packets *on this node's kernel* — the thing most likely to break on a testbed 
 
 ## Design decisions
 
-- **Virtual Wall 1 + Ubuntu 24.04 (kernel 6.8).** RustiFlow's ring buffers need
-  kernel ≥ 5.8. Virtual Wall 2 only offers Ubuntu up to 20.04 (kernel 5.4 — its
-  image list has no `UBUNTU22`/`UBUNTU24`), so a wall2 run would need a manual
-  HWE-kernel install + reboot. Wall 1 has a 24.04 image, so we run there and skip
-  that entirely. **Verify the exact image URN in jFed** (select 24.04 on a wall1
-  node, read the Raw RSpec) and fix the two `disk_image` lines if the short name
-  differs. Fallback: wall2 + `UBUNTU20-64-STD` + `linux-generic-hwe-20.04` +
-  a one-time reboot before provisioning (the wart this design avoids).
+- **Virtual Wall 2 + Ubuntu 20.04, with an automated kernel upgrade.** RustiFlow's
+  ring buffers need kernel ≥ 5.8. Wall2 has no `UBUNTU22`/`UBUNTU24` image, and
+  wall1 (which has 24.04) is chronically full — so we stay on wall2's 20.04
+  (kernel 5.4) and let `bootstrap.sh` install the HWE kernel (5.15) and **reboot
+  the node itself**, resuming provisioning through a one-shot systemd unit. No
+  manual reboot; the only visible effect is that a node takes one extra reboot
+  cycle to reach `READY`.
 - **1 Gbps is declarative** via `<property capacity="1000000">` on the link — no
   hand-run `tc`.
 - **Interface discovery by IP**, not a hardcoded `ethX` — vwall interface names vary
