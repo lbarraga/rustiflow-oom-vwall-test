@@ -110,10 +110,14 @@ ensure_experiment_iface() {
 # experiment ends — the coordination bus AND the results sink.
 shared_dir() {
   if [ -n "${SHARED_DIR:-}" ]; then echo "$SHARED_DIR"; return 0; fi
-  local d
-  for d in /groups/*/ /proj/*/; do
-    [ -d "$d" ] && { echo "${d%/}"; return 0; }
-  done
+  # Pick a REAL NFS mountpoint (not a local dir that merely looks like a share —
+  # e.g. /groups/<proj> is local while only /groups/<proj>/nids is mounted).
+  # Prefer /proj/<project> (the writable project share), then any /groups mount.
+  local m
+  m="$(awk '($3=="nfs"||$3=="nfs4") && $2 ~ "^/proj/"   {print $2}' /proc/mounts | head -n1)"
+  [ -n "$m" ] && { echo "$m"; return 0; }
+  m="$(awk '($3=="nfs"||$3=="nfs4") && $2 ~ "^/groups/" {print $2}' /proc/mounts | head -n1)"
+  [ -n "$m" ] && { echo "$m"; return 0; }
   return 1
 }
 
