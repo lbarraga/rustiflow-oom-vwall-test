@@ -60,6 +60,20 @@ manual:
     @echo "Terminal 1 (victim):    cd {{justfile_directory()}} && ./preflight.sh victim"
     @echo "Terminal 2 (attacker):  cd {{justfile_directory()}} && ./preflight.sh attacker   # within ${CAP_SECS}s"
 
+# --- experiment results ----------------------------------------------------
+
+# Summarize an OOM run's CSVs. Runs summarize.sh on a node that has the share
+# mounted. Pass exp=<slice> (default: the node's own) and host= or victim=.
+results exp="":
+    @tgt="{{victim}}"; test -n "$tgt" || { echo "set victim=user@node (or host in your ssh config)"; exit 1; }; \
+     ssh {{ssh_opts}} "$tgt" "cd $VWALL_DIR && ./experiment/summarize.sh {{exp}}"
+
+# Watch a live run's progress on both nodes.
+watch:
+    @test -n "{{victim}}" -a -n "{{attacker}}" || { echo "set victim= and attacker="; exit 1; }
+    @echo "== victim =="; ssh {{ssh_opts}} "{{victim}}" "tail -n 20 /local/experiment.log 2>/dev/null || echo 'no experiment log yet'"
+    @echo "== attacker =="; ssh {{ssh_opts}} "{{attacker}}" "tail -n 20 /local/experiment.log 2>/dev/null || echo 'no experiment log yet'"
+
 # --- teardown --------------------------------------------------------------
 
 down:
